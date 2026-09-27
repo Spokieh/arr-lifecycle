@@ -4,6 +4,8 @@ Read-only Next.js App Router application for Radarr movies, two Sonarr libraries
 
 ## Run
 
+Server deployment: http://192.168.1.161:3210 — see [read-only Docker deployment and filesystem limitations](docs/deployment.md). The local Windows process is not required for this deployment.
+
 Install with `npm ci`. Copy `.env.example` to `.env.local` and configure the service URLs and credentials. Secrets are server-only; never use NEXT_PUBLIC variables.
 
 - Development: `npm run dev`

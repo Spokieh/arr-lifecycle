@@ -6,6 +6,8 @@ import { notFound } from "next/navigation";
 import { matchLabels } from "@/lib/services/matching";
 import { artwork } from "@/lib/artwork";
 import { MovieArtwork } from "./movie-artwork";
+import { Suspense } from "react";
+import { FilesystemEvidence } from "./filesystem-evidence";
 import { MatchEvidence } from "./match-evidence";
 
 export default async function MoviePreview({
@@ -192,9 +194,6 @@ export default async function MoviePreview({
             <li>qBittorrent torrent</li>
             <li>qBittorrent downloaded data</li>
           </ul>
-          <p className="mt-5 border-t border-slate-800 pt-4 text-sm text-slate-500">
-            {preview.hardlinkMessage}
-          </p>
           <button
             disabled
             className="mt-5 cursor-not-allowed rounded-lg bg-slate-800 px-4 py-2 text-sm text-slate-500"
@@ -202,6 +201,23 @@ export default async function MoviePreview({
             Delete (not enabled yet)
           </button>
         </section>
+        <Suspense
+          fallback={
+            <p className="mt-4 text-sm text-slate-400">
+              Checking filesystem metadata…
+            </p>
+          }
+        >
+          <FilesystemEvidence
+            paths={[
+              preview.movie?.movieFile?.path ??
+                (preview.movie?.path && preview.movie?.movieFile?.relativePath
+                  ? `${preview.movie.path}/${preview.movie.movieFile.relativePath}`
+                  : preview.movie?.path),
+              preview.torrent?.content_path,
+            ].filter((path): path is string => Boolean(path))}
+          />
+        </Suspense>
       </div>
     </div>
   );

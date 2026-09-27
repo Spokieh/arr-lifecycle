@@ -15,6 +15,39 @@ require.extensions[".ts"] = (module, filename) => {
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { formatBytes } = require("../src/lib/format.ts");
+const {
+  allowedMediaPath,
+  inspectMediaPaths,
+} = require("../src/lib/server/filesystem.ts");
+test("filesystem inspection confines paths and remains disabled by default", async () => {
+  assert.equal(
+    allowedMediaPath("/data/media/movies/a.mkv"),
+    "/data/media/movies/a.mkv",
+  );
+  assert.equal(allowedMediaPath("/media/tv/a.mkv"), "/data/media/tv/a.mkv");
+  for (const path of [
+    "/etc/passwd",
+    "/data/media-other/a",
+    "/data/media/../torrents/a",
+    "/downloads/a",
+    "C:\\media\\a",
+    "/data/media/./a",
+    "/data/media/a\0b",
+  ])
+    assert.equal(allowedMediaPath(path), null);
+  const previous = process.env.FS_INSPECTION_ENABLED;
+  try {
+    process.env.FS_INSPECTION_ENABLED = "false";
+    assert.deepEqual(await inspectMediaPaths(["/data/media/a"]), {
+      enabled: false,
+      truncated: false,
+      observations: [],
+    });
+  } finally {
+    if (previous === undefined) delete process.env.FS_INSPECTION_ENABLED;
+    else process.env.FS_INSPECTION_ENABLED = previous;
+  }
+});
 const { showFileBadge } = require("../src/lib/media-card.ts");
 const {
   episodeProgress,

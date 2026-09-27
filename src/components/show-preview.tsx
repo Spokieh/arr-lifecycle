@@ -6,6 +6,8 @@ import { getShowPreview } from "@/lib/services/sonarr";
 import { formatBytes, formatSeedTime } from "@/lib/format";
 import { artwork } from "@/lib/artwork";
 import { MovieArtwork } from "./movie-artwork";
+import { Suspense } from "react";
+import { FilesystemEvidence } from "./filesystem-evidence";
 import { episodeFileState, episodeProgress } from "@/lib/episode-progress";
 
 export default async function ShowPreview({
@@ -258,9 +260,6 @@ export default async function ShowPreview({
             can be deleted here. Hash verification is not deletion
             authorization.
           </p>
-          <p className="mt-2 text-sm text-slate-400">
-            Hardlink verification unavailable in local development.
-          </p>
           <button
             disabled
             className="mt-4 cursor-not-allowed rounded bg-slate-800 px-4 py-2 text-slate-500"
@@ -268,6 +267,23 @@ export default async function ShowPreview({
             Delete (not enabled yet)
           </button>
         </section>
+        <Suspense
+          fallback={
+            <p className="mt-4 text-sm text-slate-400">
+              Checking filesystem metadata…
+            </p>
+          }
+        >
+          <FilesystemEvidence
+            paths={[
+              preview.files[0]?.path ?? series?.path,
+              ...matching.links.flatMap((link) =>
+                link.matches.map((torrent) => torrent.content_path),
+              ),
+              ...preview.files.slice(1).map((file) => file.path),
+            ].filter((path): path is string => Boolean(path))}
+          />
+        </Suspense>
       </div>
     </div>
   );

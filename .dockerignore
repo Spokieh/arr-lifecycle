@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.env*
+*.tar
+*.tar.gz
+*.png
+tests
+scripts
+.codex
+.agents
+test-results
+playwright-report
+*.tsbuildinfo

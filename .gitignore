@@ -15,6 +15,7 @@
 /modal-preview.png
 /test-results/
 /playwright-report/
+/arr-lifecycle-deploy.tar
 
 # next.js
 /.next/
