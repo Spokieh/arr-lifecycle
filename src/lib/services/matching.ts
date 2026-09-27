@@ -10,23 +10,58 @@ export const matchLabels: Record<MatchStatus, string> = {
   ambiguous: "Ambiguous",
   unavailable: "Matching unavailable",
 };
+export type HashEvidence = {
+  historyId: number;
+  movieId: number;
+  eventType: string;
+  date: string;
+  source: "downloadId" | "data.downloadId" | "data.hash";
+  hash: string;
+};
+
+/** Whitelisted evidence only: never send arbitrary history data to the UI. */
+export function historyEvidence(
+  movieId: number,
+  history: RadarrHistoryRecord[],
+): HashEvidence[] {
+  return history
+    .filter((record) => record.movieId === movieId)
+    .flatMap((record) => {
+      const fields = [
+        ["downloadId", record.downloadId],
+        ["data.downloadId", record.data?.downloadId],
+        ["data.hash", record.data?.hash],
+      ] as const;
+      return fields.flatMap(([source, value]) =>
+        typeof value === "string" &&
+        /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(value.trim())
+          ? [
+              {
+                historyId: record.id,
+                movieId: record.movieId,
+                eventType: record.eventType,
+                date: record.date,
+                source,
+                hash: value.trim().toLowerCase(),
+              },
+            ]
+          : [],
+      );
+    });
+}
 export function historyHashes(
   movieId: number,
   history: RadarrHistoryRecord[],
 ): string[] {
   return [
-    ...new Set(
-      history
-        .filter((r) => r.movieId === movieId)
-        .flatMap((r) => [r.downloadId, r.data?.downloadId, r.data?.hash])
-        .filter(
-          (v): v is string =>
-            typeof v === "string" &&
-            /^[a-f0-9]{40}$|^[a-f0-9]{64}$/i.test(v.trim()),
-        )
-        .map((v) => v.trim().toLowerCase()),
-    ),
+    ...new Set(historyEvidence(movieId, history).map((entry) => entry.hash)),
   ];
+}
+
+export function verificationStatus(status: MatchStatus, unavailable: boolean) {
+  return !unavailable && status === "matched"
+    ? "Hash match verified"
+    : "BLOCKED";
 }
 function normalize(value: string): string {
   return value
@@ -42,8 +77,10 @@ export function matchMovie(
   history: RadarrHistoryRecord[],
   torrents: QBittorrentTorrent[],
 ) {
-  const hashes = historyHashes(movie.id, history);
+  const evidence = historyEvidence(movie.id, history);
+  const hashes = [...new Set(evidence.map((entry) => entry.hash))];
   const exact = torrents.filter((t) => hashes.includes(t.hash.toLowerCase()));
+  let candidates: QBittorrentTorrent[] = [];
   let status: MatchStatus = "unmatched";
   let torrent: QBittorrentTorrent | undefined;
   let reason = "No exact torrent hash found.";
@@ -58,7 +95,7 @@ export function matchMovie(
     } else reason = "Unexpected torrent category.";
   } else {
     const title = normalize(movie.title);
-    const candidates =
+    candidates =
       title && movie.year
         ? torrents.filter(
             (t) =>
@@ -76,5 +113,14 @@ export function matchMovie(
       reason = "Multiple title/year candidates.";
     }
   }
-  return { movie, status, torrent, reason, hashes };
+  return {
+    movie,
+    status,
+    torrent,
+    reason,
+    hashes,
+    evidence,
+    exactMatches: exact,
+    candidates,
+  };
 }

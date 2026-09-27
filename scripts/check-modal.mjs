@@ -19,9 +19,35 @@ try {
   await dialog
     .getByRole("heading", { name: "Intimate Strangers", exact: true })
     .waitFor();
+  const evidence = dialog.getByRole("region", { name: "Matching evidence" });
+  await evidence
+    .getByRole("heading", { name: /Radarr history hash sources/ })
+    .waitFor();
+  assert.ok((await evidence.innerText()).includes("downloadId"));
+  assert.ok(
+    (await evidence.innerText()).includes(
+      "ba532e797caee4fe53f664c7fd8e287c9e75d33a",
+    ),
+  );
+  assert.equal(
+    await dialog.getByText("Hash match verified", { exact: true }).count(),
+    1,
+  );
+  assert.equal(
+    await dialog.getByText("SAFE TO DELETE", { exact: true }).count(),
+    0,
+  );
+  assert.equal(
+    await dialog
+      .getByRole("button", { name: "Delete (not enabled yet)", exact: true })
+      .isDisabled(),
+    true,
+  );
   await page.waitForFunction(() => {
     const img = document.querySelector("dialog img");
-    return img instanceof HTMLImageElement && img.complete && img.naturalWidth > 0;
+    return (
+      img instanceof HTMLImageElement && img.complete && img.naturalWidth > 0
+    );
   });
   await page.screenshot({ path: "modal-preview.png" });
   assert.equal(await page.locator("#movie-search").inputValue(), "Intimate");

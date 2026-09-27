@@ -25,13 +25,15 @@ export default function Home() {
                     Movies →
                   </Link>
                 ) : (
-                  section
+                  <Link href="/shows" prefetch={false}>
+                    Shows →
+                  </Link>
                 )}
               </h2>
               <p className="mt-2 text-sm text-slate-400">
                 {section === "Movies"
                   ? "Browse Radarr movies and related torrents."
-                  : "Not connected yet."}
+                  : "Browse Sonarr TV and anime with episode-level torrent evidence."}
               </p>
             </section>
           ))}

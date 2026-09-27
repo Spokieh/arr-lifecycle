@@ -4,7 +4,15 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 /** Native dialog supplies focus trapping, background inertness and Escape support. */
-export function MovieModal({ children }: { children: ReactNode }) {
+export function MovieModal({
+  children,
+  label = "Movie details and delete preview",
+  closeLabel = "Close movie details",
+}: {
+  children: ReactNode;
+  label?: string;
+  closeLabel?: string;
+}) {
   const router = useRouter();
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -26,7 +34,7 @@ export function MovieModal({ children }: { children: ReactNode }) {
   return (
     <dialog
       ref={ref}
-      aria-label="Movie details and delete preview"
+      aria-label={label}
       className="fixed inset-0 m-auto h-[100dvh] max-h-[100dvh] w-full max-w-none overflow-y-auto border border-slate-700 bg-slate-950 p-0 text-slate-100 shadow-2xl backdrop:bg-black/75 sm:h-auto sm:max-h-[90dvh] sm:max-w-5xl sm:rounded-2xl"
       onCancel={(event) => {
         event.preventDefault();
@@ -49,7 +57,7 @@ export function MovieModal({ children }: { children: ReactNode }) {
         <button
           autoFocus
           onClick={() => router.back()}
-          aria-label="Close movie details"
+          aria-label={closeLabel}
           className="rounded-lg border border-slate-600 px-4 py-2 text-sm hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-cyan-400"
         >
           Close ✕

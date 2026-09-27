@@ -29,6 +29,11 @@ export default async function MoviesPage({
   return (
     <main className="min-h-screen bg-[#181a20] px-4 py-8 text-slate-100 sm:px-10">
       <div className="mx-auto max-w-[1600px]">
+        <nav className="mb-6 flex gap-5 text-sm text-cyan-300">
+          <Link href="/">Home</Link>
+          <span>Movies</span>
+          <Link href="/shows">Shows</Link>
+        </nav>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-sm font-medium uppercase tracking-[0.25em] text-cyan-400">

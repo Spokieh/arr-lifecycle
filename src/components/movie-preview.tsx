@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { matchLabels } from "@/lib/services/matching";
 import { artwork } from "@/lib/artwork";
 import { MovieArtwork } from "./movie-artwork";
+import { MatchEvidence } from "./match-evidence";
 
 export default async function MoviePreview({
   id,
@@ -161,27 +162,29 @@ export default async function MoviePreview({
               No torrent details available.
             </p>
           )}
-          <p className="mt-4 text-xs text-slate-600">
-            Radarr history hashes:{" "}
-            {preview.historyHashes.length
-              ? preview.historyHashes.join(", ")
-              : "none returned"}
-          </p>
         </section>
+
+        <MatchEvidence
+          evidence={preview.evidence}
+          exactMatches={preview.exactMatches}
+          candidates={preview.candidates}
+          unavailable={Boolean(preview.error)}
+        />
 
         <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <h2 className="text-xl font-medium">Delete preview</h2>
             <span
-              className={`rounded-full px-4 py-2 text-sm font-semibold ${preview.eligibility === "SAFE TO DELETE" ? "bg-emerald-950 text-emerald-300" : "bg-rose-950 text-rose-300"}`}
+              className={`rounded-full px-4 py-2 text-sm font-semibold ${preview.verificationStatus === "Hash match verified" ? "bg-cyan-950 text-cyan-300" : "bg-rose-950 text-rose-300"}`}
             >
-              {preview.eligibility}
+              {preview.verificationStatus}
             </span>
           </div>
           <p className="mt-4 text-sm text-slate-300">{preview.reason}</p>
           <p className="mt-3 text-sm text-slate-400">
-            Would delete if enabled. This is a cached read-only preview, not
-            filesystem verification or deletion authorization.
+            Potential scope of a future delete action — nothing is enabled. Even
+            a verified hash does not prove that deletion is safe. This cached
+            preview does not verify files, hardlinks, or ownership.
           </p>
           <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-slate-400">
             <li>Radarr movie record</li>
