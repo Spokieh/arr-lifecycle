@@ -16,59 +16,64 @@ async function get<T>(
     config.username,
     config.password,
   );
-  return cached(cacheKey(identity, path), ttl, async () => {
-    const sessionKey = cacheKey(identity, "session");
-    const login = () =>
-      cached(sessionKey, 20 * 60_000, async () => {
-        if (!config.username && !config.password) return "";
-        return request(
-          "qBittorrent login",
-          config.url + "/api/v2/auth/login",
-          {
-            method: "POST",
-            body: new URLSearchParams({
-              username: config.username,
-              password: config.password,
-            }),
-          },
-          async (response) => {
-            if ((await response.text()).trim() !== "Ok.")
-              throw new ApiError("qBittorrent authentication failed.");
-            const cookie = response.headers
-              .get("set-cookie")
-              ?.match(/SID=([^;\s,]+)/)?.[0];
-            if (!cookie)
-              throw new ApiError("qBittorrent session cookie missing.");
-            return cookie;
-          },
-        );
-      });
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const cookie = await login();
-      try {
-        return await request(
-          "qBittorrent",
-          config.url + path,
-          {
-            headers: cookie ? { Cookie: cookie } : {},
-          },
-          decode,
-        );
-      } catch (error) {
-        if (
-          attempt === 0 &&
-          config.username &&
-          error instanceof ApiError &&
-          error.status === 403
-        ) {
-          invalidate(sessionKey);
-          continue;
+  return cached(
+    cacheKey(identity, path),
+    ttl,
+    async () => {
+      const sessionKey = cacheKey(identity, "session");
+      const login = () =>
+        cached(sessionKey, 20 * 60_000, async () => {
+          if (!config.username && !config.password) return "";
+          return request(
+            "qBittorrent login",
+            config.url + "/api/v2/auth/login",
+            {
+              method: "POST",
+              body: new URLSearchParams({
+                username: config.username,
+                password: config.password,
+              }),
+            },
+            async (response) => {
+              if ((await response.text()).trim() !== "Ok.")
+                throw new ApiError("qBittorrent authentication failed.");
+              const cookie = response.headers
+                .get("set-cookie")
+                ?.match(/SID=([^;\s,]+)/)?.[0];
+              if (!cookie)
+                throw new ApiError("qBittorrent session cookie missing.");
+              return cookie;
+            },
+          );
+        });
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const cookie = await login();
+        try {
+          return await request(
+            "qBittorrent",
+            config.url + path,
+            {
+              headers: cookie ? { Cookie: cookie } : {},
+            },
+            decode,
+          );
+        } catch (error) {
+          if (
+            attempt === 0 &&
+            config.username &&
+            error instanceof ApiError &&
+            error.status === 403
+          ) {
+            invalidate(sessionKey);
+            continue;
+          }
+          throw error;
         }
-        throw error;
       }
-    }
-    throw new ApiError("qBittorrent authentication failed.");
-  });
+      throw new ApiError("qBittorrent authentication failed.");
+    },
+    "media",
+  );
 }
 export async function getConnection() {
   return {

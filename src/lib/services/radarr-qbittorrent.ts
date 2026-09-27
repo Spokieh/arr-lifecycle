@@ -1,14 +1,13 @@
 import "server-only";
-import { getHistoryForMovies } from "@/lib/clients/radarr";
+import { getHistoryForMovies, getLibraryHistory } from "@/lib/clients/radarr";
 import { getConnection, getTorrents } from "@/lib/clients/qbittorrent";
 import { getRadarrOverview } from "./radarr";
 import { matchMovie } from "./matching";
 import { errorMessage } from "@/lib/server/http";
+import { oldestCachedRead } from "@/lib/server/cache";
+import { filterAndSortMovies, type MovieQuery } from "./movie-query";
 
-export async function getRadarrQBittorrentOverview(
-  query = "",
-  requestedPage = 1,
-) {
+export async function getRadarrQBittorrentOverview(query: MovieQuery) {
   const [radarr, connection, torrents] = await Promise.all([
     getRadarrOverview(),
     getConnection().then(
@@ -20,26 +19,36 @@ export async function getRadarrQBittorrentOverview(
       (error) => ({ value: null, error: errorMessage(error) }),
     ),
   ]);
-  const movies = radarr.movies
-    .filter((m) => m.title.toLowerCase().includes(query.toLowerCase()))
-    .sort((a, b) => a.title.localeCompare(b.title, "en") || a.id - b.id);
-  const pages = Math.max(1, Math.ceil(movies.length / 24));
-  const page = Math.min(
-    pages,
-    Math.max(1, Number.isSafeInteger(requestedPage) ? requestedPage : 1),
-  );
-  const visible = movies.slice((page - 1) * 24, page * 24);
+  const movies = filterAndSortMovies(radarr.movies, query);
+  const fullMatching = query.match !== "all";
+  let pages = Math.max(1, Math.ceil(movies.length / 24));
+  let page = Math.min(pages, query.page);
+  const visible = fullMatching
+    ? movies
+    : movies.slice((page - 1) * 24, page * 24);
   let history: Awaited<ReturnType<typeof getHistoryForMovies>> = [];
   let historyError: string | null = null;
-  if (torrents.value) {
+  if (torrents.value && visible.length) {
     try {
-      history = await getHistoryForMovies(visible.map((m) => m.id));
+      history = fullMatching
+        ? await getLibraryHistory()
+        : await getHistoryForMovies(visible.map((m) => m.id));
     } catch (error) {
       historyError = errorMessage(error);
     }
   }
-  const matches = visible.map((movie) => {
-    const match = matchMovie(movie, history, torrents.value ?? []);
+  const byMovie = new Map<number, typeof history>();
+  for (const record of history) {
+    const records = byMovie.get(record.movieId) ?? [];
+    records.push(record);
+    byMovie.set(record.movieId, records);
+  }
+  let matches = visible.map((movie) => {
+    const match = matchMovie(
+      movie,
+      byMovie.get(movie.id) ?? [],
+      torrents.value ?? [],
+    );
     if (!torrents.value || historyError) {
       return {
         ...match,
@@ -49,11 +58,21 @@ export async function getRadarrQBittorrentOverview(
     }
     return match;
   });
+  let total = movies.length;
+  if (fullMatching) {
+    matches = matches.filter((match) => match.status === query.match);
+    total = matches.length;
+    pages = Math.max(1, Math.ceil(total / 24));
+    page = Math.min(pages, query.page);
+    matches = matches.slice((page - 1) * 24, page * 24);
+  }
   return {
     matches,
     page,
     pages,
-    total: movies.length,
+    total,
+    libraryTotal: radarr.movies.length,
+    oldestReadAt: oldestCachedRead("media"),
     radarrStatus: radarr.status,
     radarrError: radarr.error ?? historyError,
     qbittorrentStatus: connection.value,

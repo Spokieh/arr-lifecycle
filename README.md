@@ -14,7 +14,9 @@ Leave both qBittorrent credentials empty only when the server already permits th
 
 ## Data flow and performance
 
-The searchable movie list renders 24 movies per page. Movie/status/torrent reads run concurrently. One paginated Radarr history query covers the visible movie IDs; details fetch the selected movie's complete history. Upstream errors are shown as unavailable, not as absence of torrents.
+The searchable movie list renders 24 movies per page. File/monitoring filters and title/year/size sorting apply before pagination. Torrent-match filters apply to the entire filtered library, using complete paginated history (up to 20,000 records, bounded lookup time). Partial history is never accepted as proof. Without a match filter, only the visible movie IDs need history; details fetch the selected movie's history. Movie/status/torrent reads run concurrently. Upstream errors are shown as unavailable, not as absence of torrents. Filters persist in pagination URLs and reset pagination when applied.
+
+Refresh data invalidates only this process's media read cache (including detail reads), preserves authentication sessions, and refreshes the current route without changing filters. It does not modify Radarr or qBittorrent. The displayed UTC timestamp is the oldest unexpired media read in the process cache, not a claim that all APIs were read atomically. No automatic browser polling is performed. Like the rest of this unauthenticated internal app, refresh must not be exposed publicly.
 
 A process-local cache stores successful reads for 30 seconds (version: 60 seconds, authenticated session: 20 minutes). Keys include service and credential identity, hashed in memory. Concurrent identical reads share a promise. The cache is capped at 512 entries, survives development module reloads, and resets on process restart. Each server process has its own cache. Expired data is not silently used as current data. Large payloads bypass the Next.js Data Cache.
 
@@ -41,6 +43,7 @@ The delete preview has no executable deletion control. Its eligibility is based 
 Optional live read-only diagnostics:
 
 - `node --env-file=.env.local scripts/probe.mjs` checks movie 148's hash mapping without printing credentials.
-- Start production on port 3100 with `npm start -- --port 3100`, then `node --env-file=.env.local scripts/benchmark.mjs`. It measures complete HTML responses (not just streamed headers), cold/warm requests, matching and credential leakage. Set BENCH_URL to test another local port.
+- Run `node --env-file=.env.local scripts/benchmark.mjs` against the existing production server on port 3000. It measures complete HTML responses (not just streamed headers), cold/warm requests, matching and credential leakage. Set BENCH_URL to test another local port.
+- `node scripts/check-modal.mjs` and `node scripts/check-filters.mjs` run read-only live Chrome checks (require local Chrome and a populated library; modal test uses movie 148, filter test expects more than 24 matched movies).
 
 No database, Sonarr integration or media mutation endpoints are present.

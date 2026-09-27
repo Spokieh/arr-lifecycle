@@ -1,4 +1,4 @@
-const base = process.env.BENCH_URL || "http://localhost:3100";
+const base = process.env.BENCH_URL || "http://localhost:3000";
 for (const path of [
   "/movies",
   "/movies",

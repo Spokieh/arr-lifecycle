@@ -10,19 +10,50 @@ import type {
 
 async function get<T>(path: string): Promise<T> {
   const { url, apiKey } = getRadarrConfig();
-  return cached(cacheKey("radarr", url, apiKey, path), 30_000, () =>
-    request(
-      "Radarr",
-      url + path,
-      { headers: { "X-Api-Key": apiKey } },
-      (r) => r.json() as Promise<T>,
-    ),
+  return cached(
+    cacheKey("radarr", url, apiKey, path),
+    30_000,
+    () =>
+      request(
+        "Radarr",
+        url + path,
+        { headers: { "X-Api-Key": apiKey } },
+        (r) => r.json() as Promise<T>,
+      ),
+    "media",
   );
 }
 export const getSystemStatus = () =>
   get<RadarrSystemStatus>("/api/v3/system/status");
 export const getMovies = () => get<RadarrMovie[]>("/api/v3/movie");
 export const getMovie = (id: number) => get<RadarrMovie>(`/api/v3/movie/${id}`);
+
+/** Read complete history for library-wide matching; never accept a truncated result. */
+export async function getLibraryHistory(): Promise<RadarrHistoryRecord[]> {
+  const records: RadarrHistoryRecord[] = [];
+  const started = Date.now();
+  for (let page = 1; page <= 20; page++) {
+    if (Date.now() - started > 5000) break;
+    const result = await get<{
+      records: RadarrHistoryRecord[];
+      totalRecords: number;
+    }>(
+      `/api/v3/history?page=${page}&pageSize=1000&sortKey=date&sortDirection=descending`,
+    );
+    if (
+      !Array.isArray(result.records) ||
+      !Number.isSafeInteger(result.totalRecords) ||
+      result.totalRecords < 0
+    )
+      throw new Error("Radarr: invalid library history response.");
+    records.push(...result.records);
+    if (records.length >= result.totalRecords) return records;
+    if (!result.records.length) break;
+  }
+  throw new Error(
+    "Complete library history is unavailable within the lookup limit. Matching is unavailable; partial history is not used.",
+  );
+}
 export async function getMovieHistory(
   id: number,
 ): Promise<RadarrHistoryRecord[]> {

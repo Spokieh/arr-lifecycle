@@ -1,7 +1,13 @@
 import "server-only";
 import { createHash } from "node:crypto";
 
-type Entry = { value?: unknown; expires: number; pending?: Promise<unknown> };
+type Entry = {
+  value?: unknown;
+  expires: number;
+  pending?: Promise<unknown>;
+  group?: string;
+  fetchedAt?: number;
+};
 const root = globalThis as typeof globalThis & {
   arrCache?: Map<string, Entry>;
 };
@@ -16,6 +22,7 @@ export async function cached<T>(
   key: string,
   ttl: number,
   load: () => Promise<T>,
+  group?: string,
 ): Promise<T> {
   const existing = entries.get(key);
   if (existing?.pending) return existing.pending as Promise<T>;
@@ -30,12 +37,13 @@ export async function cached<T>(
     }
   }
   if (entries.size >= 512) return load();
-  const entry: Entry = { expires: 0 };
+  const entry: Entry = { expires: 0, group };
   const pending = Promise.resolve()
     .then(load)
     .then(
       (value) => {
         entry.value = value;
+        entry.fetchedAt = Date.now();
         entry.expires = Date.now() + ttl;
         entry.pending = undefined;
         return value;
@@ -51,4 +59,18 @@ export async function cached<T>(
 }
 export function invalidate(key: string) {
   entries.delete(key);
+}
+
+/** Does not invalidate authentication sessions. Pending invalidated reads cannot repopulate the map. */
+export function invalidateGroup(group: string) {
+  for (const [key, entry] of entries) {
+    if (entry.group === group) entries.delete(key);
+  }
+}
+
+export function oldestCachedRead(group: string): number | null {
+  const timestamps = [...entries.values()]
+    .filter((entry) => entry.group === group && entry.expires > Date.now())
+    .flatMap((entry) => (entry.fetchedAt ? [entry.fetchedAt] : []));
+  return timestamps.length ? Math.min(...timestamps) : null;
 }
