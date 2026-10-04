@@ -16,9 +16,9 @@ export async function FilesystemEvidence({ paths }: { paths: string[] }) {
       ) : (
         <>
           <p className="mt-3 text-sm text-amber-300">
-            Hardlink verification: NOT VERIFIED. SMB/CIFS inode and link counts
-            are diagnostic only. No additional links, shared torrent contents or
-            deletion safety have been verified.
+            SMB hardlink verification: NOT VERIFIED. These mount-level inode and
+            link counts are diagnostic only. Native NAS evidence, when enabled,
+            is shown separately above. No deletion safety is implied.
           </p>
           <p className="mt-2 text-xs text-slate-400">
             Metadata only, at most four paths per preview. Directories are not

@@ -9,7 +9,7 @@
     "lint": "eslint",
     "format": "prettier --write src scripts tests README.md",
     "format:check": "prettier --check src scripts tests README.md",
-    "test": "node --conditions=react-server --test tests/core.test.cjs",
+    "test": "node --conditions=react-server --test tests/core.test.cjs tests/deletion.test.cjs tests/series-deletion.test.cjs",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {

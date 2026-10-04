@@ -4,7 +4,7 @@ export interface RadarrImage {
 }
 
 export interface RadarrMovie {
-  movieFile?: { path?: string; relativePath?: string };
+  movieFile?: { id?: number; path?: string; relativePath?: string };
   id: number;
   title: string;
   year?: number;

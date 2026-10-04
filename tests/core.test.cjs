@@ -16,6 +16,132 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { formatBytes } = require("../src/lib/format.ts");
 const {
+  canonicalNasPath,
+  torrentFilePath,
+  parseNasResult,
+  summarizeHardlinks,
+} = require("../src/lib/nas-evidence.ts");
+const { inspectNas } = require("../src/lib/server/nas.ts");
+test("native NAS requests reject unsafe paths and require explicit enabling", async () => {
+  assert.equal(canonicalNasPath("/data/media/a"), "/data/media/a");
+  assert.equal(canonicalNasPath("/data//media/a.mkv"), "/data/media/a.mkv");
+  for (const path of [
+    "/etc/passwd",
+    "/data/media/",
+    "/data/media/../a",
+    "/data/media/.zfs/snapshot/a",
+    "/data/media/a\0",
+    "/data/media/a\\b",
+    "/data/media-other/a",
+  ])
+    assert.equal(canonicalNasPath(path), null);
+  assert.equal(
+    torrentFilePath("/data/torrents/movies/", "folder/a.mkv"),
+    "/data/torrents/movies/folder/a.mkv",
+  );
+  for (const name of ["/etc/passwd", "../a", "folder/../../a", "folder\\a", ""])
+    assert.equal(torrentFilePath("/data/torrents/movies", name), null);
+  assert.equal(torrentFilePath("/downloads", "a.mkv"), null);
+  const previous = process.env.NAS_INSPECTION_ENABLED;
+  try {
+    process.env.NAS_INSPECTION_ENABLED = "false";
+    await assert.rejects(inspectNas(["/data/media/a"]), /not enabled/);
+    process.env.NAS_INSPECTION_ENABLED = "true";
+    for (const paths of [
+      [],
+      ["/etc/passwd"],
+      ["/data/media/a", "/data/media/a"],
+      ["/data//media/a"],
+      Array.from({ length: 65 }, (_, i) => `/data/media/${i}`),
+    ])
+      await assert.rejects(inspectNas(paths), /validation failed/);
+  } finally {
+    if (previous === undefined) delete process.env.NAS_INSPECTION_ENABLED;
+    else process.env.NAS_INSPECTION_ENABLED = previous;
+  }
+});
+const libraryPath = "/data/media/a",
+  torrentPath = "/data/torrents/a";
+const nativeObservation = (path, changes = {}) => ({
+  path,
+  status: "observed",
+  filesystem: "zfs",
+  device: "124",
+  inode: "630094",
+  links: 2,
+  bytes: "1396946479",
+  ...changes,
+});
+test("native proof requires distinct library/torrent paths on the same device and inode", () => {
+  const summarize = (observations) =>
+    summarizeHardlinks(observations, [libraryPath], [torrentPath]);
+  const pair = [nativeObservation(libraryPath), nativeObservation(torrentPath)];
+  assert.equal(summarize(pair)[0].confirmed, true);
+  assert.equal(summarize(pair)[0].remainingLinks, 0);
+  assert.equal(summarize([...pair, pair[0]])[0].items.length, 2);
+  assert.equal(summarize([pair[0], pair[0]])[0].confirmed, false);
+  for (const changes of [
+    { inode: "999" },
+    { device: "999" },
+    { links: 3 },
+    { bytes: "99" },
+    { status: "unavailable" },
+  ])
+    assert.equal(
+      summarize([pair[0], nativeObservation(torrentPath, changes)]).some(
+        (group) => group.confirmed,
+      ),
+      false,
+    );
+  const extra = summarize(pair.map((item) => ({ ...item, links: 3 })))[0];
+  assert.equal(extra.confirmed, true);
+  assert.equal(extra.remainingLinks, 1);
+  const inconsistent = summarize(
+    pair.map((item) => ({ ...item, links: 1 })),
+  )[0];
+  assert.equal(inconsistent.confirmed, false);
+  assert.equal(inconsistent.remainingLinks, null);
+});
+test("native response parser rejects incomplete, reordered or non-ZFS metadata", () => {
+  const paths = [libraryPath, torrentPath];
+  const valid = {
+    version: 1,
+    checkedAt: "2026-09-28T12:00:00Z",
+    observations: paths.map((path) => nativeObservation(path)),
+  };
+  assert.deepEqual(parseNasResult(valid, paths), valid);
+  for (const value of [
+    null,
+    {},
+    { ...valid, version: 2 },
+    { ...valid, checkedAt: "bad" },
+    { ...valid, observations: valid.observations.slice(1) },
+    { ...valid, observations: [...valid.observations].reverse() },
+    {
+      ...valid,
+      observations: [
+        nativeObservation(libraryPath, { filesystem: "cifs" }),
+        valid.observations[1],
+      ],
+    },
+    {
+      ...valid,
+      observations: [
+        nativeObservation(libraryPath, { links: 0 }),
+        valid.observations[1],
+      ],
+    },
+    {
+      ...valid,
+      observations: [
+        nativeObservation(libraryPath, { inode: 123 }),
+        valid.observations[1],
+      ],
+    },
+  ])
+    assert.throws(() => parseNasResult(value, paths));
+});
+const {
   allowedMediaPath,
   inspectMediaPaths,
 } = require("../src/lib/server/filesystem.ts");

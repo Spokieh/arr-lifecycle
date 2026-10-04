@@ -16,11 +16,33 @@ services:
       SONARR_URL: http://sonarr:8989
       SONARR_ANIME_URL: http://sonarr-anime:8989
       FS_INSPECTION_ENABLED: "true"
+      NAS_INSPECTION_ENABLED: "true"
+      MOVIE_DELETION_ENABLED: "true"
+      SERIES_DELETION_ENABLED: "true"
+      APP_ORIGIN: http://192.168.1.161:3210
+      DELETE_STATE_DIR: /app-state
     ports:
       - "192.168.1.161:3210:3000"
     networks:
       - arr
     volumes:
+      - type: bind
+        source: ./state
+        target: /app-state
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./secrets/nas_key
+        target: /run/secrets/nas_key
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./secrets/nas_known_hosts
+        target: /run/secrets/nas_known_hosts
+        read_only: true
+        bind:
+          create_host_path: false
       - type: bind
         source: /mnt/truenas-share/server/arr/data/media
         target: /data/media

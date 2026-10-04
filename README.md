@@ -1,10 +1,10 @@
 # Arr Lifecycle
 
-Read-only Next.js App Router application for Radarr movies, two Sonarr libraries and related qBittorrent torrents.
+Next.js App Router application for Radarr movies, two Sonarr libraries and related qBittorrent torrents. Guarded movie and whole-series deletion includes Seerr cleanup. Keep this unauthenticated application on a trusted LAN.
 
 ## Run
 
-Server deployment: http://192.168.1.161:3210 — see [read-only Docker deployment and filesystem limitations](docs/deployment.md). The local Windows process is not required for this deployment.
+Server deployment: http://192.168.1.161:3210 — see [Docker deployment and filesystem limitations](docs/deployment.md). The local Windows process is not required for this deployment.
 
 Install with `npm ci`. Copy `.env.example` to `.env.local` and configure the service URLs and credentials. Secrets are server-only; never use NEXT_PUBLIC variables.
 
@@ -34,7 +34,9 @@ The details/modal displays whitelisted evidence: history record ID, movie ID, ev
 
 History API reference: https://github.com/Radarr/Radarr/blob/develop/src/Radarr.Api.V3/History/HistoryResource.cs
 
-The delete preview has no executable deletion control and never claims **SAFE TO DELETE**. Hash verification is based on cached API evidence only; it does not verify hardlinks, filesystem ownership, or current deletion safety. Any future execution feature must fetch fresh evidence and perform filesystem checks separately.
+The cached preview never claims **SAFE TO DELETE**. Deletion separately requires an uncached preparation, typed title confirmation and fresh inspection at execution. Whole-series deletion requires native NAS protocol v4 before its first mutation, removes exact matched torrents, then unlinks only the revalidated library inventory, removes the Sonarr record with `deleteFiles=false`, and finally cleans up Seerr. Movies use a separate Radarr workflow. See [movie deletion](docs/deletion.md) and [whole-series deletion](docs/series-deletion.md). Feature enablement defaults to false outside the deployment Compose. No real deletion is part of automated verification.
+
+On the server, a separate **Native NAS hardlink evidence** section compares library files with the exact-matched torrents' file lists using fresh read-only ZFS metadata over a forced-command SSH key. Confirmed inode groups and additional live-link counts are displayed separately from SMB diagnostics. It does not authorize deletion or guarantee freed space; snapshots, open handles and shared ownership are not audited. See [deployment, limits and SSH confinement](docs/deployment.md#native-nas-metadata-inspection). Local development leaves this feature disabled.
 
 ## Verification
 
@@ -68,8 +70,8 @@ Endpoint and history field definitions were checked against the [Sonarr API sche
 
 List queries do not fetch history for every show. Opening a card loads the selected series, episodes, files, history and cached torrents concurrently, using the existing 30-second read cache and bounded request pool. Cache identity and routes include the Sonarr instance (`tv:7` and `anime:7` are different entities). Each unavailable instance is reported independently. Public HTTPS TMDB and TVDB artwork is allowlisted (TVDB: artworks.thetvdb.com/banners); URL queries/fragments are stripped. Other image hosts use a placeholder, never a credential-bearing service URL.
 
-Matching uses the selected instance's history, scoped by series and episode ID. Only valid 40/64-character hexadecimal `downloadId` values are compared to torrent hashes. No title/path matching is used for shows. One series can legitimately have multiple torrents; multiple current torrent matches for one episode are ambiguous. Shared hashes list all history-linked episode IDs and warn about multi-episode scope. This does **not** prove complete season-pack contents, current-file provenance, cross-series ownership or hardlink safety. All deletion remains disabled.
+The show overview matches valid 40/64-character hexadecimal `downloadId` values to torrent hashes, scoped by series and episode ID. Whole-series deletion can also recover hashless imports only from exact Sonarr source/destination paths and current episode file IDs, then requires the qBittorrent member path/size and native hardlink identity to agree. No title-only matching authorizes deletion. One series can legitimately have multiple torrents; ambiguous or incomplete evidence blocks preparation. The cached overview does **not** prove complete torrent contents, current-file provenance, cross-series ownership or hardlink safety. Deletion performs its checks independently using fresh service and native NAS inventories.
 
 `node scripts/check-sonarr.mjs` runs a production-build browser test with local fake Sonarr/qBittorrent APIs, no real service access. It temporarily uses port 3101 (override with SONARR_TEST_PORT), closes its own processes, and tests instance isolation, modal/direct navigation, shared hashes, outages, mobile layout, secret leakage and GET-only upstream traffic. Requires a completed build and local Chrome. Actual Sonarr connections must be checked separately with the user's configured credentials.
 
-No database or media mutation endpoints are present.
+No database is used. Movie operations are recorded in a persistent server-side journal. TV/anime remain read-only.

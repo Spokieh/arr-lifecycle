@@ -6,6 +6,8 @@ export function isSonarrInstance(value: string): value is SonarrInstance {
 }
 export interface SonarrSeries {
   id: number;
+  tvdbId?: number;
+  tmdbId?: number;
   title: string;
   year?: number;
   path?: string;
@@ -43,4 +45,9 @@ export interface SonarrHistory {
   date: string;
   eventType: string;
   downloadId?: string;
+  data?: {
+    fileId?: string | number;
+    droppedPath?: string;
+    importedPath?: string;
+  };
 }

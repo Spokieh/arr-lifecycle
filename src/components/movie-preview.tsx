@@ -8,7 +8,11 @@ import { artwork } from "@/lib/artwork";
 import { MovieArtwork } from "./movie-artwork";
 import { Suspense } from "react";
 import { FilesystemEvidence } from "./filesystem-evidence";
+import { NasEvidence } from "./nas-evidence";
 import { MatchEvidence } from "./match-evidence";
+import { MediaDeletion } from "./media-deletion";
+import { deletionEnabled } from "@/lib/server/deletion-access";
+import { SeerrEvidence } from "./seerr-evidence";
 
 export default async function MoviePreview({
   id,
@@ -166,6 +170,14 @@ export default async function MoviePreview({
           )}
         </section>
 
+        <Suspense
+          fallback={
+            <p className="mt-4 text-sm text-slate-400">Checking Seerr…</p>
+          }
+        >
+          <SeerrEvidence movieId={movieId} tmdbId={preview.movie?.tmdbId} />
+        </Suspense>
+
         <MatchEvidence
           evidence={preview.evidence}
           exactMatches={preview.exactMatches}
@@ -184,22 +196,20 @@ export default async function MoviePreview({
           </div>
           <p className="mt-4 text-sm text-slate-300">{preview.reason}</p>
           <p className="mt-3 text-sm text-slate-400">
-            Potential scope of a future delete action — nothing is enabled. Even
-            a verified hash does not prove that deletion is safe. This cached
-            preview does not verify files, hardlinks, or ownership.
+            This cached overview is informational. The deletion control below
+            prepares a fresh file and ownership check before confirmation.
           </p>
           <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-slate-400">
             <li>Radarr movie record</li>
             <li>Radarr library files</li>
             <li>qBittorrent torrent</li>
             <li>qBittorrent downloaded data</li>
+            <li>
+              Matching Seerr media, requests, issues and linked watchlist
+              entries
+            </li>
           </ul>
-          <button
-            disabled
-            className="mt-5 cursor-not-allowed rounded-lg bg-slate-800 px-4 py-2 text-sm text-slate-500"
-          >
-            Delete (not enabled yet)
-          </button>
+          <MediaDeletion movieId={movieId} enabled={deletionEnabled()} />
         </section>
         <Suspense
           fallback={
@@ -208,6 +218,20 @@ export default async function MoviePreview({
             </p>
           }
         >
+          <NasEvidence
+            libraryPaths={[
+              preview.movie?.movieFile?.path ??
+                (preview.movie?.path && preview.movie?.movieFile?.relativePath
+                  ? `${preview.movie.path}/${preview.movie.movieFile.relativePath}`
+                  : undefined),
+            ].filter((path): path is string => Boolean(path))}
+            torrents={
+              preview.matchStatus === "matched" && preview.torrent
+                ? [preview.torrent]
+                : []
+            }
+            unavailable={Boolean(preview.error)}
+          />
           <FilesystemEvidence
             paths={[
               preview.movie?.movieFile?.path ??

@@ -8,7 +8,11 @@ import { artwork } from "@/lib/artwork";
 import { MovieArtwork } from "./movie-artwork";
 import { Suspense } from "react";
 import { FilesystemEvidence } from "./filesystem-evidence";
+import { NasEvidence } from "./nas-evidence";
 import { episodeFileState, episodeProgress } from "@/lib/episode-progress";
+import { MediaDeletion } from "./media-deletion";
+import { SeerrEvidence } from "./seerr-evidence";
+import { seriesDeletionEnabled } from "@/lib/server/deletion-access";
 
 export default async function ShowPreview({
   instance,
@@ -99,6 +103,18 @@ export default async function ShowPreview({
             />
           </dl>
         </section>
+        <Suspense
+          fallback={
+            <p className="mt-4 text-sm text-slate-400">Checking Seerr…</p>
+          }
+        >
+          <SeerrEvidence
+            instance={instance}
+            seriesId={Number(id)}
+            tmdbId={series?.tmdbId}
+            tvdbId={series?.tvdbId}
+          />
+        </Suspense>
         <section
           aria-label="Sonarr torrent evidence"
           className="mt-6 rounded-xl border border-slate-800 p-5"
@@ -113,7 +129,7 @@ export default async function ShowPreview({
             <p className="mt-4 text-amber-300">
               {preview.errors.length
                 ? "Matching unavailable."
-                : "No valid torrent hash returned in this series’ history. No title/path guesses are used."}
+                : "No valid torrent hash returned in this series’ history. Delete preparation may use an exact recorded import path only when its source, destination and current file ID match one qBittorrent member; native NAS hardlink checks still have to pass."}
             </p>
           )}
           {matching.links.map((link) => (
@@ -254,18 +270,19 @@ export default async function ShowPreview({
           })}
         </section>
         <section className="my-6 rounded-xl border border-amber-900 p-5">
-          <h2 className="text-xl">Deletion not enabled</h2>
+          <h2 className="text-xl">Delete preview · entire series</h2>
           <p className="mt-3 text-sm text-slate-400">
-            Read-only integration. No series, season, episode, torrent or file
-            can be deleted here. Hash verification is not deletion
-            authorization.
+            Preparation lists all current library files, exact history-linked
+            torrents and Seerr entries. Each episode file must have native
+            hardlink proof. Shared or uncertain data blocks deletion. This
+            removes the whole series; season and episode deletion are separate
+            future features.
           </p>
-          <button
-            disabled
-            className="mt-4 cursor-not-allowed rounded bg-slate-800 px-4 py-2 text-slate-500"
-          >
-            Delete (not enabled yet)
-          </button>
+          <MediaDeletion
+            seriesId={Number(id)}
+            instance={instance}
+            enabled={seriesDeletionEnabled()}
+          />
         </section>
         <Suspense
           fallback={
@@ -274,6 +291,19 @@ export default async function ShowPreview({
             </p>
           }
         >
+          <NasEvidence
+            libraryPaths={preview.files
+              .map((file) => file.path)
+              .filter((path): path is string => Boolean(path))}
+            torrents={matching.links
+              .filter((link) => link.status === "Hash match verified")
+              .flatMap((link) => link.matches)}
+            unavailable={
+              preview.errors.length > 0 ||
+              preview.files.some((file) => !file.path) ||
+              matching.episodes.some((entry) => entry.status === "Ambiguous")
+            }
+          />
           <FilesystemEvidence
             paths={[
               preview.files[0]?.path ?? series?.path,

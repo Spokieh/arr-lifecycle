@@ -38,6 +38,7 @@ export async function request<T>(
   url: string,
   init: RequestInit,
   decode: (response: Response) => Promise<T>,
+  timeoutMs = 5000,
 ): Promise<T> {
   const release = await acquire();
   try {
@@ -45,7 +46,7 @@ export async function request<T>(
       ...init,
       cache: "no-store",
       redirect: "error",
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok)
       throw new ApiError(
@@ -56,7 +57,7 @@ export async function request<T>(
   } catch (error) {
     if (error instanceof ApiError) throw error;
     throw new ApiError(
-      `${service}: request failed or exceeded the 5-second limit.`,
+      `${service}: request failed or exceeded the ${timeoutMs / 1000}-second limit.`,
     );
   } finally {
     release();
